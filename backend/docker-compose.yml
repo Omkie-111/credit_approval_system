@@ -1,0 +1,46 @@
+version: '3'
+
+services:
+  credit_approval_system:
+    build:
+      context: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./credit_approval_system:/credit_approval_system
+    command: >
+      sh -c "python3 manage.py migrate &&
+             python3 manage.py wait_for_db &&
+             python3 manage.py ingest_data &&
+             pyton3 manage.py tests Credit.test_views
+             python3 manage.py runserver 0.0.0.0:8000"
+
+    env_file:
+      - ./.env.dev
+    depends_on:
+      - db
+      - redis
+      - celery
+
+  db:
+    image: postgres:16.1-alpine3.19
+    env_file:
+      - ./.env.dev
+    volumes: 
+      - pgdata:/var/lib/postgresql/data
+  redis:
+    image: redis:alpine
+  celery:
+    restart: always
+    build:
+      context: .
+    command: celery -A credit_approval_system.celery worker --pool=solo -l info
+    volumes:
+      - ./credit_approval_system:/credit_approval_system
+    env_file:
+      - ./.env.dev
+    depends_on:
+      - db
+      - redis
+volumes:
+  pgdata:
